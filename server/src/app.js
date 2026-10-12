@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/authRoutes.js';
 import tutorRoutes from './routes/tutorRoutes.js';
 import problemRoutes from './routes/problemRoutes.js';
@@ -21,26 +22,20 @@ const getCleanOrigin = (url) => {
 
 const configuredClientUrl = getCleanOrigin(process.env.CLIENT_URL);
 
+// Whitelist only explicit origins
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:3000',
+  configuredClientUrl,
+].filter(Boolean);
+
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
     if (!origin) return callback(null, true);
 
-    // Allow local development servers
-    if (
-      origin.startsWith('http://localhost:') ||
-      origin.startsWith('http://127.0.0.1:')
-    ) {
-      return callback(null, true);
-    }
-
-    // Allow all Vercel production and preview deployment subdomains
-    if (origin.endsWith('.vercel.app')) {
-      return callback(null, true);
-    }
-
-    // Allow explicit CLIENT_URL from Render environment variables
-    if (configuredClientUrl && (configuredClientUrl === '*' || origin === configuredClientUrl)) {
+    if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
 
@@ -55,6 +50,42 @@ const corsOptions = {
 // Middlewares
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// --- Rate Limiting Setup ---
+// 1. General API limit: 200 requests per 15 minutes per IP
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  message: { message: 'Too many requests from this IP. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// 2. Strict Auth limit: 20 attempts per 15 minutes per IP
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { message: 'Too many authentication attempts. Please try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// 3. Heavy Execution limit: 20 runs per minute per IP for code runner and AI calls
+const executionLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 20,
+  message: { message: 'Resource usage limit reached. Please wait a moment before trying again.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply rate limiters
+app.use('/api', globalLimiter);
+app.use('/api/auth', authLimiter);
+app.use('/api/code', executionLimiter);
+app.use('/api/resume', executionLimiter);
+app.use('/api/interview', executionLimiter);
+app.use('/api/tutor', executionLimiter);
 
 // Health check route
 app.get('/', (req, res) => {

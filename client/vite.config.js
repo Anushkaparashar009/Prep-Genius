@@ -4,4 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  build: {
+    sourcemap: false, // Ensures source maps are never exposed in production
+  },
 });

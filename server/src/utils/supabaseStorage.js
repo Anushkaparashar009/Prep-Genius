@@ -5,56 +5,86 @@ dotenv.config();
 
 const supabaseUrl = (process.env.SUPABASE_URL || '').trim();
 const supabaseKey = (
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_SERVICE_ROLE_KEY || 
+  process.env.SUPABASE_KEY || 
+  process.env.SUPABASE_ANON_KEY || 
   ''
 ).trim();
+const BUCKET_NAME = (process.env.SUPABASE_BUCKET || 'resumes').trim();
 
 let supabase = null;
 
 if (supabaseUrl && supabaseKey) {
-  try {
-    supabase = createClient(supabaseUrl, supabaseKey);
-  } catch (err) {
-    console.warn('⚠️ Failed to initialize Supabase client:', err.message);
-  }
+  supabase = createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false },
+  });
 } else {
-  console.warn('⚠️ Supabase credentials missing in environment variables. Storage will be disabled.');
+  console.warn('[Supabase] Warning: Missing SUPABASE_URL or SUPABASE_KEY in server/.env');
 }
 
 /**
- * Uploads a resume buffer to Supabase Storage bucket
- * Returns public URL or empty string if disabled
+ * Ensures the bucket exists; attempts auto-creation if using a service role key.
  */
-export const uploadResumeToSupabase = async (fileBuffer, originalName, mimeType) => {
+const ensureBucketExists = async () => {
+  if (!supabase) return false;
+  try {
+    const { data: buckets, error } = await supabase.storage.listBuckets();
+    if (error) {
+      console.warn(`[Supabase] Could not list buckets: ${error.message}`);
+      return false;
+    }
+
+    const exists = buckets.some((b) => b.name === BUCKET_NAME);
+    if (!exists) {
+      console.log(`[Supabase] Bucket "${BUCKET_NAME}" not found in project. Attempting to create it...`);
+      const { error: createError } = await supabase.storage.createBucket(BUCKET_NAME, {
+        public: true,
+      });
+      if (createError) {
+        console.error(`[Supabase] Failed to auto-create bucket "${BUCKET_NAME}":`, createError.message);
+        return false;
+      }
+      console.log(`[Supabase] Successfully created public bucket: "${BUCKET_NAME}"`);
+    }
+    return true;
+  } catch (err) {
+    console.error('[Supabase] Error checking bucket existence:', err.message);
+    return false;
+  }
+};
+
+export const uploadResumeToSupabase = async (fileBuffer, originalName, mimeType = 'application/pdf') => {
   if (!supabase) {
-    console.warn('⚠️ Storage skipped: Supabase is not configured.');
+    console.warn('[Supabase] Skipping upload: Supabase client not initialized.');
     return '';
   }
 
   try {
-    const bucket = process.env.SUPABASE_BUCKET || 'resumes';
-    const cleanFileName = `${Date.now()}-${originalName.replace(/\s+/g, '_')}`;
+    // Check or create bucket
+    await ensureBucketExists();
 
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(cleanFileName, fileBuffer, {
-        contentType: mimeType || 'application/pdf',
-        upsert: false,
+    const cleanName = (originalName || 'resume.pdf').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const fileName = `${Date.now()}-${cleanName}`;
+    const filePath = `uploads/${fileName}`;
+
+    console.log(`[Supabase] Uploading to bucket: "${BUCKET_NAME}", path: "${filePath}"`);
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(filePath, fileBuffer, {
+        contentType: mimeType,
+        upsert: true,
       });
 
-    if (error) {
-      console.warn('Supabase storage upload error:', error.message);
+    if (uploadError) {
+      console.error(`Supabase storage upload error (${BUCKET_NAME}):`, uploadError.message);
       return '';
     }
 
-    const { data: publicUrlData } = supabase.storage
-      .from(bucket)
-      .getPublicUrl(cleanFileName);
-
-    return publicUrlData?.publicUrl || '';
-  } catch (err) {
-    console.warn('Supabase upload exception:', err.message);
+    const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(filePath);
+    return data?.publicUrl || '';
+  } catch (error) {
+    console.error('[Supabase] Unexpected upload error:', error.message);
     return '';
   }
 };

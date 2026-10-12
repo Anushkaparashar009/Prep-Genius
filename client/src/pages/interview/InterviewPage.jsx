@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   startInterviewApi,
@@ -20,6 +20,8 @@ import {
   RotateCcw,
   Loader2,
   AlertCircle,
+  Mic,
+  MicOff,
 } from 'lucide-react';
 
 const PRESET_ROLES = [
@@ -46,6 +48,11 @@ export default function InterviewPage() {
   const [isConcluding, setIsConcluding] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [error, setError] = useState('');
+
+  // Speech Recognition state
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(true);
+  const recognitionRef = useRef(null);
 
   // History state
   const [history, setHistory] = useState([]);
@@ -74,6 +81,71 @@ export default function InterviewPage() {
     loadHistory();
   }, []);
 
+  // Initialize Speech Recognition
+  useEffect(() => {
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setSpeechSupported(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event) => {
+      let finalTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript + ' ';
+        }
+      }
+
+      if (finalTranscript) {
+        setInputAnswer((prev) =>
+          prev ? `${prev.trim()} ${finalTranscript.trim()}` : finalTranscript.trim()
+        );
+      }
+    };
+
+    recognition.onerror = (event) => {
+      console.warn('Speech recognition error:', event.error);
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognitionRef.current = recognition;
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+    };
+  }, []);
+
+  const toggleListening = useCallback(() => {
+    if (!recognitionRef.current) return;
+
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch (err) {
+        console.warn('Speech recognition start failed:', err);
+      }
+    }
+  }, [isListening]);
+
   const handleStartInterview = async (e) => {
     e.preventDefault();
     if (!roleTitle.trim()) return;
@@ -100,6 +172,11 @@ export default function InterviewPage() {
   const handleSendAnswer = async (e) => {
     e.preventDefault();
     if (!inputAnswer.trim() || loading || !session) return;
+
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
 
     const answerText = inputAnswer.trim();
     setInputAnswer('');
@@ -128,6 +205,11 @@ export default function InterviewPage() {
   const handleFinishInterview = async () => {
     if (!session || isConcluding) return;
 
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
+
     const candidateReplies = messages.filter((m) => m.role === 'user');
     if (candidateReplies.length === 0) {
       setError('Please answer at least one question before ending the interview.');
@@ -152,6 +234,10 @@ export default function InterviewPage() {
   };
 
   const handleResetSession = () => {
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
     setIsStarted(false);
     setSession(null);
     setMessages([]);
@@ -417,10 +503,40 @@ export default function InterviewPage() {
                   type="text"
                   value={inputAnswer}
                   onChange={(e) => setInputAnswer(e.target.value)}
-                  placeholder="Explain your thought process, data structures, trade-offs..."
+                  placeholder={
+                    isListening
+                      ? 'Listening... speak your answer now...'
+                      : 'Type or speak your answer...'
+                  }
                   disabled={loading || isConcluding}
-                  className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50"
+                  className={`flex-1 bg-zinc-900 border rounded-xl px-4 py-2.5 text-xs sm:text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none transition-colors disabled:opacity-50 ${
+                    isListening
+                      ? 'border-rose-500/80 bg-rose-950/10 placeholder-rose-300/70'
+                      : 'border-zinc-800 focus:border-purple-500'
+                  }`}
                 />
+
+                {/* Microphone Toggle Button */}
+                {speechSupported && (
+                  <button
+                    type="button"
+                    onClick={toggleListening}
+                    disabled={loading || isConcluding}
+                    title={isListening ? 'Stop recording' : 'Speak your answer'}
+                    className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center transition-all cursor-pointer disabled:opacity-50 shrink-0 ${
+                      isListening
+                        ? 'bg-rose-600 text-white border-rose-500 shadow-md shadow-rose-600/30 animate-pulse'
+                        : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-300'
+                    }`}
+                  >
+                    {isListening ? (
+                      <MicOff className="w-4 h-4 text-white" />
+                    ) : (
+                      <Mic className="w-4 h-4 text-purple-400" />
+                    )}
+                  </button>
+                )}
+
                 <button
                   type="submit"
                   disabled={loading || isConcluding || !inputAnswer.trim()}

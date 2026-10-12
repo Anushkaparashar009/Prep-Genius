@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Terminal, Code2, FileCheck2, LayoutDashboard, User } from 'lucide-react';
+import { Terminal, Code2, FileCheck2, LayoutDashboard, Bot, User } from 'lucide-react';
 
 const Navbar = () => {
   const location = useLocation();
@@ -8,7 +8,8 @@ const Navbar = () => {
   const navLinks = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { label: 'Problem Hub', path: '/problems', icon: Code2 },
-    { label: 'ATS Resume Audit', path: '/resume-audit', icon: FileCheck2 },
+    { label: 'ATS Resume Audit', path: '/resume', icon: FileCheck2 },
+    { label: 'Adaptive Mock', path: '/interview', icon: Bot },
   ];
 
   return (
@@ -32,7 +33,11 @@ const Navbar = () => {
         <nav className="hidden items-center gap-1 md:flex">
           {navLinks.map((item) => {
             const Icon = item.icon;
-            const isActive = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
+            const isActive =
+              location.pathname === item.path ||
+              (item.path !== '/dashboard' && location.pathname.startsWith(`${item.path}/`)) ||
+              (item.path === '/problems' && location.pathname.startsWith('/tutor'));
+
             return (
               <Link
                 key={item.path}

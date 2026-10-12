@@ -11,7 +11,6 @@ const VERIFIED_MODELS = [
   'gemini-2.5-flash-lite',
   'gemini-3.5-flash',
   'gemini-3.5-flash-lite',
-  'gemini-flash-latest',
 ];
 
 const safeJsonParse = (rawText) => {
@@ -57,7 +56,6 @@ const runResumeAnalysisAI = async (prompt) => {
     } catch (err) {
       console.warn(`[Resume Analyzer] Attempt on ${model} failed (${err?.status || err?.message}). Switching to fallback...`);
       lastError = err;
-      // Pause 1 second before trying next model to clear transient rate-limit spikes
       await sleep(1000);
     }
   }
@@ -78,7 +76,7 @@ export const analyzeResume = async (req, res) => {
 
     const targetRole = req.body.targetRole?.trim() || 'Full Stack Developer / SDE-1';
 
-    // 1. Text extraction
+    // 1. Text extraction using PDFParse instance
     let resumeText = '';
     try {
       parser = new PDFParse({ data: req.file.buffer });
