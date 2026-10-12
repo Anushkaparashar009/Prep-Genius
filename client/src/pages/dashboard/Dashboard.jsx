@@ -12,7 +12,6 @@ import {
   LogOut, 
   Terminal, 
   Sparkles,
-  Lock,
   ArrowRight,
   CheckCircle2,
   XCircle,
@@ -102,7 +101,7 @@ export default function Dashboard() {
           <div className="relative z-10 max-w-2xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-900/80 border border-zinc-800 text-[11px] text-zinc-400 mb-4 sm:mb-6 font-mono">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              phase3_active_v2.0
+              phase4_active_v2.5
             </div>
 
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white tracking-tight leading-snug">
@@ -198,7 +197,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Module 2: ATS Resume Audit (NOW ACTIVE) */}
+            {/* Module 2: ATS Resume Audit */}
             <div 
               onClick={() => navigate('/resume')}
               className="group relative flex flex-col justify-between p-5 sm:p-6 bg-[#0E131F] hover:bg-[#121929] border border-purple-500/30 hover:border-purple-500/70 rounded-xl cursor-pointer transition-all duration-200 shadow-lg shadow-purple-950/20 hover:shadow-purple-900/30"
@@ -231,26 +230,35 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Module 3: Adaptive AI Mock */}
-            <div className="relative flex flex-col justify-between p-5 sm:p-6 bg-[#0E131F]/60 border border-zinc-800/60 rounded-xl opacity-75">
+            {/* Module 3: Adaptive AI Mock (NOW UNLOCKED) */}
+            <div 
+              onClick={() => navigate('/interview')}
+              className="group relative flex flex-col justify-between p-5 sm:p-6 bg-[#0E131F] hover:bg-[#121929] border border-purple-500/30 hover:border-purple-500/70 rounded-xl cursor-pointer transition-all duration-200 shadow-lg shadow-purple-950/20 hover:shadow-purple-900/30"
+            >
               <div>
-                <div className="w-10 h-10 rounded-lg bg-zinc-800/50 border border-zinc-700/40 flex items-center justify-center text-zinc-400 mb-4">
-                  <Bot className="w-5 h-5" />
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-10 h-10 rounded-lg bg-purple-600/10 border border-purple-500/30 flex items-center justify-center text-purple-400 group-hover:bg-purple-600/20 transition-colors">
+                    <Bot className="w-5 h-5" />
+                  </div>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    Live Now
+                  </span>
                 </div>
-                <h3 className="text-sm font-bold text-zinc-200">
+                <h3 className="text-sm font-bold text-zinc-100 group-hover:text-purple-300 transition-colors flex items-center gap-1.5">
                   Adaptive AI Mock
+                  <ArrowRight className="w-3.5 h-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-purple-400" />
                 </h3>
                 <p className="text-xs text-zinc-400 mt-2 leading-relaxed">
-                  Interactive voice/text interviews challenging your algorithmic complexity and system design trade-offs.
+                  Realistic technical interview rounds. Interactive questions, deep follow-up probes, and full committee scorecards.
                 </p>
               </div>
 
-              <div className="mt-6 pt-4 border-t border-zinc-800/60 flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-zinc-500 font-mono">
-                  Phase 4
+              <div className="mt-6 pt-4 border-t border-zinc-800/80 flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-purple-400 font-mono">
+                  Phase 4 Active
                 </span>
-                <span className="flex items-center gap-1 text-xs text-zinc-500">
-                  <Lock className="w-3.5 h-3.5" /> Upcoming
+                <span className="text-xs font-medium text-purple-400 flex items-center gap-1 group-hover:underline">
+                  Enter Mock &rarr;
                 </span>
               </div>
             </div>

@@ -10,6 +10,7 @@ import Dashboard from './pages/dashboard/Dashboard.jsx';
 import Tutor from './pages/tutor/Tutor.jsx';
 import ProblemList from './pages/problems/ProblemList.jsx';
 import ResumeReview from './pages/resume/ResumeReview.jsx';
+import InterviewPage from './pages/interview/InterviewPage.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 
 export default function App() {
@@ -63,6 +64,15 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <ResumeReview />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/interview"
+            element={
+              <ProtectedRoute>
+                <InterviewPage />
               </ProtectedRoute>
             }
           />
