@@ -1,34 +1,18 @@
 import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import authRoutes from './routes/authRoutes.js';
-import tutorRoutes from './routes/tutorRoutes.js';
-import problemRoutes from './routes/problemRoutes.js';
-import codeRoutes from './routes/codeRoutes.js';
-import resumeRoutes from './routes/resumeRoutes.js';
-import interviewRoutes from './routes/interviewRoutes.js';
+import { config } from './config/env.js';
+import apiRouter from './routes/index.js';
 import { errorHandler, notFound } from './middleware/errorMiddleware.js';
 
 const app = express();
 
-const getCleanOrigin = (url) => {
-  if (!url || url === '*') return '*';
-  try {
-    return new URL(url).origin;
-  } catch {
-    return url.replace(/\/+$/, '');
-  }
-};
-
-const configuredClientUrl = getCleanOrigin(process.env.CLIENT_URL);
-
-// Whitelist only explicit origins
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:3000',
-  configuredClientUrl,
+  config.clientUrl,
 ].filter(Boolean);
 
 const corsOptions = {
@@ -52,7 +36,6 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 // --- Rate Limiting Setup ---
-// 1. General API limit: 200 requests per 15 minutes per IP
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200,
@@ -61,7 +44,6 @@ const globalLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// 2. Strict Auth limit: 20 attempts per 15 minutes per IP
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
@@ -70,7 +52,6 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// 3. Heavy Execution limit: 20 runs per minute per IP for code runner and AI calls
 const executionLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
   max: 20,
@@ -92,13 +73,8 @@ app.get('/', (req, res) => {
   res.json({ status: 'active', message: 'Prep Genius API is running' });
 });
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/tutor', tutorRoutes);
-app.use('/api/problems', problemRoutes);
-app.use('/api/code', codeRoutes);
-app.use('/api/resume', resumeRoutes);
-app.use('/api/interview', interviewRoutes);
+// Centralized API Gateway
+app.use('/api', apiRouter);
 
 // Error handling middleware
 app.use(notFound);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTutorChat } from '../../hooks/useTutorChat';
 import { 
-  sendTutorMessage, 
   fetchUserSessions, 
   fetchSessionById, 
   deleteUserSession 
@@ -33,12 +33,10 @@ export default function Tutor() {
   const navigate = useNavigate();
   const { slug: routeSlug } = useParams();
 
-  // Sessions & Chat State
+  // Sessions & History State
   const [sessions, setSessions] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
-  const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
-  const [loading, setLoading] = useState(false);
   const [fetchingHistory, setFetchingHistory] = useState(false);
 
   // Problem State
@@ -47,6 +45,16 @@ export default function Tutor() {
   const [loadingProblem, setLoadingProblem] = useState(false);
   const [problemDropdownOpen, setProblemDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
+
+  // Hook-driven Chat Engine
+  const {
+    messages,
+    loading,
+    error: tutorError,
+    sendMessage,
+    fetchHistory,
+    clearChat,
+  } = useTutorChat(currentProblem?._id);
 
   // Responsive Layout & Panes
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 1024);
@@ -88,6 +96,12 @@ export default function Tutor() {
     loadSessions();
     loadProblems();
   }, [routeSlug]);
+
+  useEffect(() => {
+    if (currentProblem?._id) {
+      fetchHistory();
+    }
+  }, [currentProblem?._id, fetchHistory]);
 
   useEffect(() => {
     if (mobileActiveTab === 'chat') {
@@ -151,7 +165,7 @@ export default function Tutor() {
   const loadSessions = async () => {
     try {
       const data = await fetchUserSessions();
-      setSessions(data);
+      setSessions(Array.isArray(data) ? data : data?.sessions || []);
     } catch (err) {
       console.error('Failed to load sessions:', err);
     }
@@ -161,8 +175,8 @@ export default function Tutor() {
     setLoadingProblem(true);
     try {
       const problemList = await fetchAllProblems();
-      setProblems(problemList);
-      if (problemList.length > 0) {
+      setProblems(problemList || []);
+      if (problemList && problemList.length > 0) {
         const targetSlug = routeSlug || problemList[0].slug;
         await handleSelectProblem(targetSlug, false);
       }
@@ -223,7 +237,6 @@ export default function Tutor() {
     try {
       const sessionData = await fetchSessionById(sessionId);
       setCurrentSessionId(sessionData._id);
-      setMessages(sessionData.messages || []);
       if (window.innerWidth < 768) {
         setSidebarOpen(false);
       }
@@ -234,10 +247,10 @@ export default function Tutor() {
     }
   };
 
-  const handleNewChat = () => {
+  const handleNewChat = async () => {
     setCurrentSessionId(null);
-    setMessages([]);
     setInputMessage('');
+    await clearChat();
     if (window.innerWidth < 768) {
       setSidebarOpen(false);
     }
@@ -309,42 +322,12 @@ export default function Tutor() {
 
   const executeSend = async (userText, includeCodeContext = false) => {
     if (!userText.trim() || loading) return;
-
-    const updatedMessages = [...messages, { role: 'user', content: userText.trim() }];
-    setMessages(updatedMessages);
-    setLoading(true);
-
-    try {
-      const problemTopic = currentProblem 
-        ? `Problem: ${currentProblem.title} (${currentProblem.category})` 
-        : 'General Technical';
-
-      const res = await sendTutorMessage(
-        userText.trim(),
-        currentSessionId,
-        problemTopic,
-        includeCodeContext ? code : '',
-        includeCodeContext ? language : ''
-      );
-      
-      if (!currentSessionId && res.sessionId) {
-        setCurrentSessionId(res.sessionId);
-        loadSessions();
-      }
-      
-      setMessages(res.messages);
-    } catch (err) {
-      console.error('Error sending message:', err);
-      setMessages([
-        ...updatedMessages,
-        { 
-          role: 'assistant', 
-          content: 'Sorry, I ran into an issue connecting to CodePilot. Please try again.' 
-        }
-      ]);
-    } finally {
-      setLoading(false);
-    }
+    await sendMessage(
+      userText.trim(),
+      includeCodeContext ? code : '',
+      includeCodeContext ? language : 'cpp'
+    );
+    loadSessions();
   };
 
   const handleFormSubmit = (e) => {
@@ -716,6 +699,12 @@ export default function Tutor() {
                     <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse delay-150"></span>
                     <span className="text-xs ml-2 text-zinc-400">CodePilot is thinking...</span>
                   </div>
+                </div>
+              )}
+
+              {tutorError && (
+                <div className="p-2.5 rounded-lg bg-rose-950/30 border border-rose-900 text-xs text-rose-300">
+                  {tutorError}
                 </div>
               )}
               <div ref={messagesEndRef} />

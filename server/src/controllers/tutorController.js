@@ -1,129 +1,112 @@
 import ChatSession from '../models/ChatSession.js';
-import { generateSocraticResponse } from '../services/aiService.js';
+import Problem from '../models/Problem.js';
+import { runGeminiPrompt } from '../services/geminiService.js';
+import { asyncHandler } from '../utils/asyncWrapper.js';
 
-/**
- * @desc    Send a message to Socratic tutor (or start a new session)
- * @route   POST /api/tutor/chat
- * @access  Private
- */
-export const sendMessage = async (req, res, next) => {
-  try {
-    const { sessionId, message, topic, code, language } = req.body;
-    const userId = req.user._id;
+export const sendMessage = asyncHandler(async (req, res) => {
+  const { problemId, message, userCode, language } = req.body;
 
-    if (!message || message.trim() === '') {
-      return res.status(400).json({ message: 'Message content is required.' });
-    }
-
-    let session;
-
-    if (sessionId) {
-      session = await ChatSession.findOne({ _id: sessionId, userId });
-      if (!session) {
-        return res.status(404).json({ message: 'Chat session not found.' });
-      }
-    } else {
-      const sessionTitle = message.slice(0, 30) + (message.length > 30 ? '...' : '');
-      session = new ChatSession({
-        userId,
-        title: sessionTitle,
-        topic: topic || 'General Technical',
-        messages: [],
-      });
-    }
-
-    // Append user message
-    session.messages.push({
-      role: 'user',
-      content: message.trim(),
-    });
-
-    // Call Socratic AI service with conversational history and current code buffer
-    const aiReply = await generateSocraticResponse(
-      session.messages,
-      code || '',
-      language || ''
-    );
-
-    // Append assistant response
-    session.messages.push({
-      role: 'assistant',
-      content: aiReply,
-    });
-
-    await session.save();
-
-    res.status(200).json({
-      sessionId: session._id,
-      title: session.title,
-      messages: session.messages,
-      latestReply: aiReply,
-    });
-  } catch (error) {
-    console.error('--- Gemini AI Tutor Error ---');
-    console.error(error);
-    console.error('-----------------------------');
-    next(error);
+  if (!message || !message.trim()) {
+    return res.status(400).json({ message: 'Message content cannot be empty' });
   }
-};
 
-/**
- * @desc    Get all chat sessions for the logged-in user
- * @route   GET /api/tutor/sessions
- * @access  Private
- */
-export const getUserSessions = async (req, res, next) => {
-  try {
-    const sessions = await ChatSession.find({ userId: req.user._id })
-      .select('title topic createdAt updatedAt')
-      .sort({ updatedAt: -1 });
-
-    res.status(200).json(sessions);
-  } catch (error) {
-    next(error);
+  let problemContext = 'General algorithmic problem solving';
+  if (problemId) {
+    const problem = await Problem.findById(problemId);
+    if (problem) {
+      problemContext = `Problem: "${problem.title}"\nDescription: ${problem.description}\nDifficulty: ${problem.difficulty}`;
+    }
   }
-};
 
-/**
- * @desc    Get a single chat session with full history
- * @route   GET /api/tutor/sessions/:id
- * @access  Private
- */
-export const getSessionById = async (req, res, next) => {
-  try {
-    const session = await ChatSession.findOne({
-      _id: req.params.id,
+  let session = await ChatSession.findOne({
+    userId: req.user._id,
+    problemId: problemId || null,
+  });
+
+  if (!session) {
+    session = await ChatSession.create({
       userId: req.user._id,
+      problemId: problemId || null,
+      messages: [],
     });
-
-    if (!session) {
-      return res.status(404).json({ message: 'Chat session not found.' });
-    }
-
-    res.status(200).json(session);
-  } catch (error) {
-    next(error);
   }
-};
 
-/**
- * @desc    Delete a chat session
- * @route   DELETE /api/tutor/sessions/:id
- * @access  Private
- */
-export const deleteSession = async (req, res, next) => {
-  try {
-    const session = await ChatSession.findOneAndDelete({
-      _id: req.params.id,
-      userId: req.user._id,
-    });
+  const prompt = `You are a world-class, Socratic DSA and Software Engineering Tutor.
+Guide the candidate step-by-step without giving away the full code solution immediately unless they have solved the core logic or explicitly asked for syntax clarification.
 
-    if (!session) {
-      return res.status(404).json({ message: 'Chat session not found.' });
-    }
+CONTEXT:
+${problemContext}
 
-    res.status(200).json({ message: 'Session deleted successfully.' });
-  } catch (error) {
-    next(error);
+CANDIDATE CODE (${language || 'unknown'}):
+${userCode ? `\`\`\`${language || 'text'}\n${userCode}\n\`\`\`` : 'No code written yet.'}
+
+RECENT CONVERSATION HISTORY:
+${session.messages.slice(-6).map((m) => `${m.role.toUpperCase()}:${m.content}`).join('\n')}
+
+CANDIDATE QUERY:
+"${message}"
+
+Respond concisely with clear hints, complexity analysis, or targeted questions to help them think through the problem.`;
+
+  const aiResult = await runGeminiPrompt({
+    prompt,
+    temperature: 0.3,
+    caller: 'AI Tutor',
+  });
+
+  session.messages.push({ role: 'user', content: message });
+  session.messages.push({ role: 'assistant', content: aiResult.text });
+  await session.save();
+
+  res.status(200).json({
+    reply: aiResult.text,
+    modelUsed: aiResult.model,
+    messages: session.messages,
+  });
+});
+
+// Alias for backwards compatibility if referenced elsewhere
+export const handleTutorChat = sendMessage;
+
+export const getTutorHistory = asyncHandler(async (req, res) => {
+  const { problemId } = req.params;
+  const session = await ChatSession.findOne({
+    userId: req.user._id,
+    problemId: problemId || null,
+  });
+
+  res.status(200).json(session ? session.messages : []);
+});
+
+export const getUserSessions = asyncHandler(async (req, res) => {
+  const sessions = await ChatSession.find({ userId: req.user._id })
+    .populate('problemId', 'title slug difficulty')
+    .sort({ updatedAt: -1 });
+
+  res.status(200).json(sessions);
+});
+
+export const getSessionById = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const session = await ChatSession.findOne({
+    _id: id,
+    userId: req.user._id,
+  }).populate('problemId', 'title slug difficulty');
+
+  if (!session) {
+    return res.status(404).json({ message: 'Session not found' });
   }
-};
+
+  res.status(200).json(session);
+});
+
+export const deleteSession = asyncHandler(async (req, res) => {
+  const { problemId } = req.params;
+
+  await ChatSession.findOneAndDelete({
+    userId: req.user._id,
+    problemId: problemId || null,
+  });
+
+  res.status(200).json({ message: 'Chat session reset successfully' });
+});
