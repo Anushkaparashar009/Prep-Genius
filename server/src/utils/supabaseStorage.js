@@ -1,40 +1,60 @@
 import { createClient } from '@supabase/supabase-js';
-import crypto from 'crypto';
+import dotenv from 'dotenv';
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
+dotenv.config();
 
-if (!supabaseUrl || !supabaseKey) {
-  console.warn('⚠️ Supabase credentials missing from .env');
+const supabaseUrl = (process.env.SUPABASE_URL || '').trim();
+const supabaseKey = (
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  ''
+).trim();
+
+let supabase = null;
+
+if (supabaseUrl && supabaseKey) {
+  try {
+    supabase = createClient(supabaseUrl, supabaseKey);
+  } catch (err) {
+    console.warn('⚠️ Failed to initialize Supabase client:', err.message);
+  }
+} else {
+  console.warn('⚠️ Supabase credentials missing in environment variables. Storage will be disabled.');
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
-
 /**
- * Uploads a file buffer to Supabase Storage
+ * Uploads a resume buffer to Supabase Storage bucket
+ * Returns public URL or empty string if disabled
  */
-export const uploadResumeToSupabase = async (
-  fileBuffer,
-  originalName,
-  mimeType = 'application/pdf'
-) => {
-  const uniqueId = crypto.randomBytes(6).toString('hex');
-  const safeName = originalName.replace(/[^a-zA-Z0-9.-]/g, '_');
-  const filePath = `resumes/${uniqueId}-${safeName}`;
-
-  // Matching your exact bucket name from dashboard: "Resume"
-  const { error: uploadError } = await supabase.storage
-    .from('Resume')
-    .upload(filePath, fileBuffer, {
-      contentType: mimeType,
-      upsert: false,
-    });
-
-  if (uploadError) {
-    console.error('Supabase Upload Error:', uploadError);
-    throw new Error(`Failed to upload resume to storage: ${uploadError.message}`);
+export const uploadResumeToSupabase = async (fileBuffer, originalName, mimeType) => {
+  if (!supabase) {
+    console.warn('⚠️ Storage skipped: Supabase is not configured.');
+    return '';
   }
 
-  const { data } = supabase.storage.from('Resume').getPublicUrl(filePath);
-  return data.publicUrl;
+  try {
+    const bucket = process.env.SUPABASE_BUCKET || 'resumes';
+    const cleanFileName = `${Date.now()}-${originalName.replace(/\s+/g, '_')}`;
+
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .upload(cleanFileName, fileBuffer, {
+        contentType: mimeType || 'application/pdf',
+        upsert: false,
+      });
+
+    if (error) {
+      console.warn('Supabase storage upload error:', error.message);
+      return '';
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(cleanFileName);
+
+    return publicUrlData?.publicUrl || '';
+  } catch (err) {
+    console.warn('Supabase upload exception:', err.message);
+    return '';
+  }
 };
