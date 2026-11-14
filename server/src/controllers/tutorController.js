@@ -11,9 +11,12 @@ export const sendMessage = asyncHandler(async (req, res) => {
   }
 
   let problemContext = 'General algorithmic problem solving';
+  let problemTitle = 'New Prep Session';
+
   if (problemId) {
     const problem = await Problem.findById(problemId);
     if (problem) {
+      problemTitle = problem.title;
       problemContext = `Problem: "${problem.title}"\nDescription: ${problem.description}\nDifficulty: ${problem.difficulty}`;
     }
   }
@@ -27,8 +30,11 @@ export const sendMessage = asyncHandler(async (req, res) => {
     session = await ChatSession.create({
       userId: req.user._id,
       problemId: problemId || null,
+      title: problemTitle,
       messages: [],
     });
+  } else if (problemId && (!session.title || session.title === 'New Prep Session')) {
+    session.title = problemTitle;
   }
 
   const prompt = `You are a world-class, Socratic DSA and Software Engineering Tutor.
@@ -101,11 +107,11 @@ export const getSessionById = asyncHandler(async (req, res) => {
 });
 
 export const deleteSession = asyncHandler(async (req, res) => {
-  const { problemId } = req.params;
+  const targetId = req.params.problemId || req.params.id;
 
   await ChatSession.findOneAndDelete({
     userId: req.user._id,
-    problemId: problemId || null,
+    $or: [{ problemId: targetId }, { _id: targetId }],
   });
 
   res.status(200).json({ message: 'Chat session reset successfully' });

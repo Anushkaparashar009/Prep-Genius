@@ -32,6 +32,7 @@ const resumeAuditSchema = new mongoose.Schema(
       type: String,
     },
     strengths: [{ type: String }],
+    improvements: [{ type: String }],
     weaknesses: [{ type: String }],
     missingKeywords: [{ type: String }],
     bulletPointImprovements: [

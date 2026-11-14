@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   sendMessage,
+  getTutorHistory,
   getUserSessions,
   getSessionById,
   deleteSession,
@@ -13,8 +14,10 @@ const router = express.Router();
 router.use(protect);
 
 router.post('/chat', sendMessage);
+router.get('/history/:problemId', getTutorHistory);
 router.get('/sessions', getUserSessions);
 router.get('/sessions/:id', getSessionById);
+router.delete('/session/:problemId', deleteSession);
 router.delete('/sessions/:id', deleteSession);
 
 export default router;

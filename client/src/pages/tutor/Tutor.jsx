@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useTutorChat } from '../../hooks/useTutorChat';
 import { 
   fetchUserSessions, 
-  fetchSessionById, 
   deleteUserSession 
 } from '../../api/tutorApi';
 import { fetchAllProblems, fetchProblemBySlug } from '../../api/problems';
@@ -23,10 +22,8 @@ import {
   PanelLeft,
   Code,
   BookOpen,
-  MessageSquare,
   X,
-  ChevronDown,
-  Check
+  ChevronDown
 } from 'lucide-react';
 
 export default function Tutor() {
@@ -37,7 +34,6 @@ export default function Tutor() {
   const [sessions, setSessions] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [inputMessage, setInputMessage] = useState('');
-  const [fetchingHistory, setFetchingHistory] = useState(false);
 
   // Problem State
   const [problems, setProblems] = useState([]);
@@ -102,6 +98,16 @@ export default function Tutor() {
       fetchHistory();
     }
   }, [currentProblem?._id, fetchHistory]);
+
+  // Keep active sidebar session highlighted in sync with currentProblem
+  useEffect(() => {
+    if (currentProblem?._id && sessions.length > 0) {
+      const matchingSession = sessions.find(
+        (s) => (s.problemId?._id || s.problemId) === currentProblem._id
+      );
+      setCurrentSessionId(matchingSession ? matchingSession._id : null);
+    }
+  }, [currentProblem?._id, sessions]);
 
   useEffect(() => {
     if (mobileActiveTab === 'chat') {
@@ -231,19 +237,13 @@ export default function Tutor() {
     setCode(starter);
   };
 
-  const handleSelectSession = async (sessionId) => {
-    if (sessionId === currentSessionId) return;
-    setFetchingHistory(true);
-    try {
-      const sessionData = await fetchSessionById(sessionId);
-      setCurrentSessionId(sessionData._id);
-      if (window.innerWidth < 768) {
-        setSidebarOpen(false);
-      }
-    } catch (err) {
-      console.error('Failed to retrieve session:', err);
-    } finally {
-      setFetchingHistory(false);
+  const handleSelectSession = async (session) => {
+    setCurrentSessionId(session._id);
+    if (session.problemId?.slug) {
+      await handleSelectProblem(session.problemId.slug, true);
+    }
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false);
     }
   };
 
@@ -251,6 +251,7 @@ export default function Tutor() {
     setCurrentSessionId(null);
     setInputMessage('');
     await clearChat();
+    loadSessions();
     if (window.innerWidth < 768) {
       setSidebarOpen(false);
     }
@@ -262,7 +263,8 @@ export default function Tutor() {
       await deleteUserSession(sessionId);
       setSessions((prev) => prev.filter((s) => s._id !== sessionId));
       if (currentSessionId === sessionId) {
-        handleNewChat();
+        setCurrentSessionId(null);
+        await clearChat();
       }
     } catch (err) {
       console.error('Failed to delete session:', err);
@@ -409,14 +411,16 @@ export default function Tutor() {
             sessions.map((session) => (
               <div
                 key={session._id}
-                onClick={() => handleSelectSession(session._id)}
+                onClick={() => handleSelectSession(session)}
                 className={`flex items-center justify-between p-2.5 rounded-lg text-xs cursor-pointer transition-colors group ${
                   currentSessionId === session._id
                     ? 'bg-zinc-800/90 text-purple-300 font-medium border border-zinc-700/60'
                     : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
                 }`}
               >
-                <span className="truncate pr-2">{session.title || 'Untitled Session'}</span>
+                <span className="truncate pr-2">
+                  {session.problemId?.title || session.title || 'Untitled Session'}
+                </span>
                 <button
                   onClick={(e) => handleDeleteSession(e, session._id)}
                   className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-rose-400 p-1 rounded transition-opacity cursor-pointer"
@@ -644,11 +648,7 @@ export default function Tutor() {
             } md:flex`}
           >
             <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-3.5">
-              {fetchingHistory ? (
-                <div className="flex justify-center items-center h-full text-zinc-500 text-xs">
-                  Loading session thread...
-                </div>
-              ) : messages.length === 0 ? (
+              {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center max-w-sm mx-auto px-4 text-zinc-400">
                   <div className="w-10 h-10 rounded-xl bg-purple-600/10 border border-purple-500/30 flex items-center justify-center text-purple-400 mb-2.5 shadow-lg shadow-purple-950/30">
                     <Terminal className="w-5 h-5" />

@@ -1,18 +1,22 @@
 import mongoose from 'mongoose';
 
-const messageSchema = new mongoose.Schema(
+const transcriptEntrySchema = new mongoose.Schema(
   {
-    role: {
+    speaker: {
       type: String,
-      enum: ['user', 'assistant'],
+      enum: ['interviewer', 'candidate', 'assistant', 'user'],
       required: true,
     },
-    content: {
+    message: {
       type: String,
       required: true,
+    },
+    timestamp: {
+      type: Date,
+      default: Date.now,
     },
   },
-  { _id: false, timestamps: { createdAt: true, updatedAt: false } }
+  { _id: false }
 );
 
 const interviewSessionSchema = new mongoose.Schema(
@@ -22,6 +26,10 @@ const interviewSessionSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
       index: true,
+    },
+    role: {
+      type: String,
+      default: 'Full Stack Engineer (SDE-1)',
     },
     roleTitle: {
       type: String,
@@ -33,12 +41,16 @@ const interviewSessionSchema = new mongoose.Schema(
       enum: ['Entry', 'Intermediate', 'Advanced'],
       default: 'Entry',
     },
+    interviewType: {
+      type: String,
+      default: 'Entry',
+    },
     status: {
       type: String,
       enum: ['in-progress', 'completed'],
       default: 'in-progress',
     },
-    messages: [messageSchema],
+    transcript: [transcriptEntrySchema],
     feedback: {
       technicalScore: { type: Number, default: 0 },
       communicationScore: { type: Number, default: 0 },

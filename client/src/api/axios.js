@@ -2,6 +2,7 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  withCredentials: true,
 });
 
 // Interceptor to attach JWT token to outgoing requests
@@ -22,7 +23,7 @@ api.interceptors.response.use(
   (error) => {
     if (error.response && error.response.status === 401) {
       // Don't loop if login itself returned 401
-      if (!error.config.url.includes('/auth/login')) {
+      if (!error.config?.url?.includes('/auth/login')) {
         localStorage.removeItem('token');
         if (window.location.pathname !== '/login') {
           window.location.href = '/login';

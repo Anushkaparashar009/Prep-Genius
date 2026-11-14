@@ -23,6 +23,12 @@ const chatSessionSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    problemId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Problem',
+      default: null,
+      index: true,
+    },
     title: {
       type: String,
       default: 'New Prep Session',
@@ -37,6 +43,8 @@ const chatSessionSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+chatSessionSchema.index({ userId: 1, problemId: 1 });
 
 const ChatSession = mongoose.model('ChatSession', chatSessionSchema);
 
