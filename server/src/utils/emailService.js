@@ -1,27 +1,6 @@
 import nodemailer from 'nodemailer';
 import { config } from '../config/env.js';
 
-const createTransporter = () => {
-  if (!config.email.user || !config.email.pass) {
-    console.warn('[EmailService] EMAIL_USER or EMAIL_PASS missing in environment variables.');
-    return null;
-  }
-
-  return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true, // Use SSL on port 465 (works reliably on Render)
-    family: 4, // Force IPv4 to avoid Render IPv6 socket timeouts
-    auth: {
-      user: config.email.user,
-      pass: config.email.pass,
-    },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
-  });
-};
-
 const buildEmailFooter = (unsubscribeUrl) => `
   <div style="margin-top: 32px; padding-top: 16px; border-top: 1px solid #27272a; font-size: 12px; color: #a1a1aa; line-height: 1.5;">
     <p style="margin: 0 0 6px 0;">PrepGenius Education Technologies • Gwalior, MP, India</p>
@@ -34,10 +13,66 @@ const buildEmailFooter = (unsubscribeUrl) => `
   </div>
 `;
 
-export const sendVerificationOtpEmail = async ({ to, name, otp, unsubscribeUrl }) => {
-  const transporter = createTransporter();
-  const subject = `${otp} is your PrepGenius verification code`;
+const sendMailUnified = async ({ to, toName, subject, html, devFallbackLog }) => {
+  // 1. Primary: Brevo HTTPS REST API (Works reliably on Render free tier)
+  if (config.email.brevoApiKey) {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'api-key': config.email.brevoApiKey,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        sender: {
+          name: 'PrepGenius Security',
+          email: config.email.user || config.email.support,
+        },
+        to: [{ email: to, name: toName || to }],
+        subject,
+        htmlContent: html,
+      }),
+    });
 
+    if (!response.ok) {
+      const errBody = await response.text();
+      throw new Error(`Brevo API error (${response.status}): ${errBody}`);
+    }
+
+    const data = await response.json();
+    console.log(`[EmailService] Delivered via Brevo HTTPS API to ${to} (messageId: ${data.messageId})`);
+    return;
+  }
+
+  // 2. Local Fallback: Gmail SMTP
+  if (config.email.user && config.email.pass) {
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      family: 4,
+      auth: {
+        user: config.email.user,
+        pass: config.email.pass,
+      },
+      connectionTimeout: 10000,
+    });
+
+    const info = await transporter.sendMail({
+      from: `"PrepGenius Security" <${config.email.user}>`,
+      to,
+      subject,
+      html,
+    });
+    console.log(`[EmailService] Delivered via Gmail SMTP to ${to} (messageId: ${info.messageId})`);
+    return;
+  }
+
+  console.log(devFallbackLog);
+};
+
+export const sendVerificationOtpEmail = async ({ to, name, otp, unsubscribeUrl }) => {
+  const subject = `${otp} is your PrepGenius verification code`;
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; background-color: #090d16; color: #f4f4f5; padding: 32px; border-radius: 12px; border: 1px solid #27272a;">
       <h2 style="margin: 0 0 12px 0; color: #ffffff; font-size: 20px;">Verify your PrepGenius email</h2>
@@ -54,24 +89,17 @@ export const sendVerificationOtpEmail = async ({ to, name, otp, unsubscribeUrl }
     </div>
   `;
 
-  if (!transporter) {
-    console.log(`[DEV EMAIL - OTP] To: ${to} | OTP: ${otp}`);
-    return;
-  }
-
-  const info = await transporter.sendMail({
-    from: `"PrepGenius Security" <${config.email.user}>`,
+  await sendMailUnified({
     to,
+    toName: name,
     subject,
     html,
+    devFallbackLog: `[DEV EMAIL - OTP] To: ${to} | OTP: ${otp}`,
   });
-  console.log(`[EmailService] OTP sent to ${to} (messageId: ${info.messageId})`);
 };
 
 export const sendPasswordResetEmail = async ({ to, name, resetUrl, unsubscribeUrl }) => {
-  const transporter = createTransporter();
   const subject = 'Reset your PrepGenius password';
-
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; background-color: #090d16; color: #f4f4f5; padding: 32px; border-radius: 12px; border: 1px solid #27272a;">
       <h2 style="margin: 0 0 12px 0; color: #ffffff; font-size: 20px;">Password Reset Request</h2>
@@ -90,16 +118,11 @@ export const sendPasswordResetEmail = async ({ to, name, resetUrl, unsubscribeUr
     </div>
   `;
 
-  if (!transporter) {
-    console.log(`[DEV EMAIL - RESET] To: ${to} | URL: ${resetUrl}`);
-    return;
-  }
-
-  const info = await transporter.sendMail({
-    from: `"PrepGenius Security" <${config.email.user}>`,
+  await sendMailUnified({
     to,
+    toName: name,
     subject,
     html,
+    devFallbackLog: `[DEV EMAIL - RESET] To: ${to} | URL: ${resetUrl}`,
   });
-  console.log(`[EmailService] Password reset email sent to ${to} (messageId: ${info.messageId})`);
 };

@@ -39,6 +39,7 @@ export const config = Object.freeze({
   email: {
     user: (process.env.EMAIL_USER || '').trim(),
     pass: (process.env.EMAIL_PASS || '').trim(),
+    brevoApiKey: (process.env.BREVO_API_KEY || '').trim(),
     support: (process.env.SUPPORT_EMAIL || process.env.EMAIL_USER || 'support@prepgenius.app').trim(),
   },
   supabase: {
