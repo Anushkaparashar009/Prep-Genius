@@ -1,3 +1,4 @@
+import nodemailer from 'nodemailer';
 import { config } from '../config/env.js';
 
 const buildEmailFooter = (unsubscribeUrl) => `
@@ -12,43 +13,62 @@ const buildEmailFooter = (unsubscribeUrl) => `
   </div>
 `;
 
-const sendMailUnified = async ({ to, toName, subject, html }) => {
-  const apiKey = (config.email?.brevoApiKey || process.env.BREVO_API_KEY || '').trim();
-  const senderEmail = (config.email?.user || process.env.EMAIL_USER || '').trim();
-
-  if (!apiKey) {
-    throw new Error('Server config error: BREVO_API_KEY is missing in Render Environment Variables.');
-  }
-
-  if (!senderEmail) {
-    throw new Error('Server config error: EMAIL_USER is missing in Render Environment Variables.');
-  }
-
-  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: {
-      accept: 'application/json',
-      'api-key': apiKey,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      sender: {
-        name: 'PrepGenius Security',
-        email: senderEmail,
+const sendMailUnified = async ({ to, toName, subject, html, devFallbackLog }) => {
+  // 1. Primary: Brevo HTTPS REST API (Works reliably on Render free tier)
+  if (config.email.brevoApiKey) {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'api-key': config.email.brevoApiKey,
+        'content-type': 'application/json',
       },
-      to: [{ email: to, name: toName || to }],
-      subject,
-      htmlContent: html,
-    }),
-  });
+      body: JSON.stringify({
+        sender: {
+          name: 'PrepGenius Security',
+          email: config.email.user || config.email.support,
+        },
+        to: [{ email: to, name: toName || to }],
+        subject,
+        htmlContent: html,
+      }),
+    });
 
-  if (!response.ok) {
-    const errBody = await response.text();
-    throw new Error(`Brevo API error (${response.status}): ${errBody}`);
+    if (!response.ok) {
+      const errBody = await response.text();
+      throw new Error(`Brevo API error (${response.status}): ${errBody}`);
+    }
+
+    const data = await response.json();
+    console.log(`[EmailService] Delivered via Brevo HTTPS API to ${to} (messageId: ${data.messageId})`);
+    return;
   }
 
-  const data = await response.json();
-  console.log(`[EmailService] Delivered via Brevo HTTPS API to ${to} (messageId: ${data.messageId})`);
+  // 2. Local Fallback: Gmail SMTP
+  if (config.email.user && config.email.pass) {
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      family: 4,
+      auth: {
+        user: config.email.user,
+        pass: config.email.pass,
+      },
+      connectionTimeout: 10000,
+    });
+
+    const info = await transporter.sendMail({
+      from: `"PrepGenius Security" <${config.email.user}>`,
+      to,
+      subject,
+      html,
+    });
+    console.log(`[EmailService] Delivered via Gmail SMTP to ${to} (messageId: ${info.messageId})`);
+    return;
+  }
+
+  console.log(devFallbackLog);
 };
 
 export const sendVerificationOtpEmail = async ({ to, name, otp, unsubscribeUrl }) => {
@@ -69,7 +89,13 @@ export const sendVerificationOtpEmail = async ({ to, name, otp, unsubscribeUrl }
     </div>
   `;
 
-  await sendMailUnified({ to, toName: name, subject, html });
+  await sendMailUnified({
+    to,
+    toName: name,
+    subject,
+    html,
+    devFallbackLog: `[DEV EMAIL - OTP] To: ${to} | OTP: ${otp}`,
+  });
 };
 
 export const sendPasswordResetEmail = async ({ to, name, resetUrl, unsubscribeUrl }) => {
@@ -92,5 +118,11 @@ export const sendPasswordResetEmail = async ({ to, name, resetUrl, unsubscribeUr
     </div>
   `;
 
-  await sendMailUnified({ to, toName: name, subject, html });
+  await sendMailUnified({
+    to,
+    toName: name,
+    subject,
+    html,
+    devFallbackLog: `[DEV EMAIL - RESET] To: ${to} | URL: ${resetUrl}`,
+  });
 };
