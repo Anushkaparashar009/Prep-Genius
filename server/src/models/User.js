@@ -7,6 +7,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Please provide your full name'],
       trim: true,
+      maxlength: [80, 'Name cannot exceed 80 characters'],
     },
     email: {
       type: String,
@@ -22,13 +23,38 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       required: [true, 'Please provide a password'],
-      minlength: [6, 'Password must be at least 6 characters'],
+      minlength: [8, 'Password must be at least 8 characters'],
       select: false,
     },
-    targetRole: {
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    otpHash: {
       type: String,
-      default: 'Full Stack Developer',
-      trim: true,
+      select: false,
+    },
+    otpExpires: {
+      type: Date,
+      select: false,
+    },
+    resetPasswordToken: {
+      type: String,
+      select: false,
+    },
+    resetPasswordExpires: {
+      type: Date,
+      select: false,
+    },
+    consents: {
+      termsAccepted: { type: Boolean, required: true, default: false },
+      ageConfirmed13Plus: { type: Boolean, required: true, default: false },
+      marketingOptIn: { type: Boolean, default: false },
+      consentedAt: { type: Date, default: Date.now },
+    },
+    unsubscribedFromEmails: {
+      type: Boolean,
+      default: false,
     },
   },
   {

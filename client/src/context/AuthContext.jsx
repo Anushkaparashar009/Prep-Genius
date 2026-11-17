@@ -1,5 +1,11 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { loginRequest, registerRequest, fetchMeRequest } from '../api/authApi';
+import {
+  loginRequest,
+  registerRequest,
+  verifyOtpRequest,
+  fetchMeRequest,
+  deleteAccountRequest,
+} from '../api/authApi';
 
 const AuthContext = createContext(null);
 
@@ -31,25 +37,40 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     const data = await loginRequest(email, password);
-    localStorage.setItem('token', data.token);
-    setUser({
-      _id: data._id,
-      name: data.name,
-      email: data.email,
-      targetRole: data.targetRole,
-    });
+    if (data.token) {
+      localStorage.setItem('token', data.token);
+      setUser({
+        _id: data._id,
+        name: data.name,
+        email: data.email,
+      });
+    }
     return data;
   };
 
   const register = async (formData) => {
     const data = await registerRequest(formData);
-    localStorage.setItem('token', data.token);
-    setUser({
-      _id: data._id,
-      name: data.name,
-      email: data.email,
-      targetRole: data.targetRole,
-    });
+    if (data.token) {
+      localStorage.setItem('token', data.token);
+      setUser({
+        _id: data._id,
+        name: data.name,
+        email: data.email,
+      });
+    }
+    return data;
+  };
+
+  const verifyOtp = async (email, otp) => {
+    const data = await verifyOtpRequest(email, otp);
+    if (data.token) {
+      localStorage.setItem('token', data.token);
+      setUser({
+        _id: data._id,
+        name: data.name,
+        email: data.email,
+      });
+    }
     return data;
   };
 
@@ -58,8 +79,17 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const deleteAccount = async () => {
+    const data = await deleteAccountRequest();
+    localStorage.removeItem('token');
+    setUser(null);
+    return data;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, register, verifyOtp, logout, deleteAccount }}
+    >
       {children}
     </AuthContext.Provider>
   );

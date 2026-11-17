@@ -10,7 +10,6 @@ const REQUIRED_ENV = [
 
 const missing = REQUIRED_ENV.filter((key) => !process.env[key] || process.env[key].trim() === '');
 
-// Check for any valid Supabase secret key variant
 const supabaseKey = (
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_KEY ||
@@ -33,9 +32,15 @@ export const config = Object.freeze({
   port: parseInt(process.env.PORT, 10) || 5000,
   nodeEnv: process.env.NODE_ENV || 'development',
   clientUrl: (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/+$/, ''),
+  serverUrl: (process.env.SERVER_URL || `http://localhost:${parseInt(process.env.PORT, 10) || 5000}`).replace(/\/+$/, ''),
   mongoUri: process.env.MONGO_URI.trim(),
   jwtSecret: process.env.JWT_SECRET.trim(),
   geminiApiKey: (process.env.RESUME_GEMINI_API_KEY || process.env.GEMINI_API_KEY).trim(),
+  email: {
+    user: (process.env.EMAIL_USER || '').trim(),
+    pass: (process.env.EMAIL_PASS || '').trim(),
+    support: (process.env.SUPPORT_EMAIL || process.env.EMAIL_USER || 'support@prepgenius.app').trim(),
+  },
   supabase: {
     url: process.env.SUPABASE_URL.trim(),
     key: supabaseKey,
