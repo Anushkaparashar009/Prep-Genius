@@ -3,16 +3,22 @@ import { config } from '../config/env.js';
 
 const createTransporter = () => {
   if (!config.email.user || !config.email.pass) {
-    console.warn('[EmailService] EMAIL_USER or EMAIL_PASS missing. Emails will be logged to console in development.');
+    console.warn('[EmailService] EMAIL_USER or EMAIL_PASS missing in environment variables.');
     return null;
   }
 
   return nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true, // Use SSL on port 465 (works reliably on Render)
+    family: 4, // Force IPv4 to avoid Render IPv6 socket timeouts
     auth: {
       user: config.email.user,
-      pass: config.email.pass, // Use a 16-character Gmail App Password
+      pass: config.email.pass,
     },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
 };
 
@@ -49,16 +55,17 @@ export const sendVerificationOtpEmail = async ({ to, name, otp, unsubscribeUrl }
   `;
 
   if (!transporter) {
-    console.log(`\n[DEV EMAIL - OTP] To: ${to} | OTP: ${otp}\n`);
+    console.log(`[DEV EMAIL - OTP] To: ${to} | OTP: ${otp}`);
     return;
   }
 
-  await transporter.sendMail({
+  const info = await transporter.sendMail({
     from: `"PrepGenius Security" <${config.email.user}>`,
     to,
     subject,
     html,
   });
+  console.log(`[EmailService] OTP sent to ${to} (messageId: ${info.messageId})`);
 };
 
 export const sendPasswordResetEmail = async ({ to, name, resetUrl, unsubscribeUrl }) => {
@@ -84,14 +91,15 @@ export const sendPasswordResetEmail = async ({ to, name, resetUrl, unsubscribeUr
   `;
 
   if (!transporter) {
-    console.log(`\n[DEV EMAIL - RESET] To: ${to} | URL: ${resetUrl}\n`);
+    console.log(`[DEV EMAIL - RESET] To: ${to} | URL: ${resetUrl}`);
     return;
   }
 
-  await transporter.sendMail({
+  const info = await transporter.sendMail({
     from: `"PrepGenius Security" <${config.email.user}>`,
     to,
     subject,
     html,
   });
+  console.log(`[EmailService] Password reset email sent to ${to} (messageId: ${info.messageId})`);
 };
