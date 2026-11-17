@@ -22,7 +22,7 @@ PrepGenius is a full-stack technical placement and interview readiness applicati
 
 ## Live Deployment
 
-- **Frontend Client:** https://prep-genius.vercel.app
+- **Frontend Client:** https://perp-genius.vercel.app/login
 - **Backend API:** https://prep-genius-server.onrender.com
 - **GitHub** https://github.com/jatinkm007/Prep-Genius.git
 
